@@ -12,9 +12,12 @@ from fixedincomelib.market.data_conventions import (
     DataConvention,
     DataConventionIFR,
 )
-from fixedincomelib.market.data_identifiers import DataIdentifier, DataIdentifierIFR
+from fixedincomelib.market.data_identifiers import DataIdentifier, DataIdentifierIFR, DataIdentifierOvernightIndexSwap
 
 from fixedincomelib.market.data_conventions import (
     DataConventionFRA, DataConventionRFRSwap, DataConventionOvernightIndexBasisSwap,
 )
 from fixedincomelib.market.registries import IndexFixingsManager
+
+from fixedincomelib.market.data_conventions import DataConventionZeroSpread
+from fixedincomelib.market.data_identifiers import DataIdentifierZeroSpread, DataIdentifierDataGeneric

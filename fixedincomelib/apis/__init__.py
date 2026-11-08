@@ -16,9 +16,9 @@ __all__ += [
     "qfDisplayProduct",
 ]
 
-from fixedincomelib.apis.data import qfCreateData1D, qfCreateDataCollection
+from fixedincomelib.apis.data import qfCreateData1D, qfCreateDataCollection, qfCreateDataGeneric
 
-__all__ += ["qfCreateData1D", "qfCreateDataCollection"]
+__all__ += ["qfCreateData1D", "qfCreateDataCollection", "qfCreateDataGeneric"]
 
 from fixedincomelib.apis.build_method import (
     qfCreateBuildMethod,

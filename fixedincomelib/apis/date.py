@@ -82,7 +82,7 @@ def qfCreateSchedule(
         holiday_convention : str,
         business_day_convention : str, 
         accrual_basis : str,
-        rule : Optional[int]=ql.DateGeneration.Backward, 
+        rule : str='BACKWARD',
         end_of_month : Optional[bool]=False,
         fix_in_arrear : Optional[bool]=False, 
         fixing_offset : Optional[str]='0D',
@@ -92,11 +92,16 @@ def qfCreateSchedule(
         first_regular_date : Optional[str]='',
         next_to_last_date : Optional[str]='',
         pay_in_advance : Optional[bool]=False) -> pd.DataFrame:
+    """Create a schedule with a case-insensitive BACKWARD or FORWARD rule."""
 
-    assert rule.upper() in ['BACKWARD', 'FORWARD']
+    if not isinstance(rule, str):
+        raise TypeError("rule must be a string: 'BACKWARD' or 'FORWARD'.")
+    rule_name = rule.upper()
+    if rule_name not in ['BACKWARD', 'FORWARD']:
+        raise ValueError("rule must be 'BACKWARD' or 'FORWARD'.")
     this_rule = ql.DateGeneration.Backward
-    if rule.upper() == 'FORWARD':
-            this_rule = ql.DateGeneration.Forward
+    if rule_name == 'FORWARD':
+        this_rule = ql.DateGeneration.Forward
 
     return make_schedule(
         Date(start_date),

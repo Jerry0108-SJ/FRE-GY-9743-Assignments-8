@@ -8,6 +8,12 @@ def qfCreate1DInterpolator(
     values: np.ndarray | List,
     interp_method: str,
     extrap_method: str):
+    """Create a 1-D interpolator through InterpolatorFactory.
+
+    Currently implemented: PIECEWISE_CONSTANT_LEFT_CONTINUOUS with FLAT
+    extrapolation. Additional methods can be implemented in the factory
+    without changing this API.
+    """
 
     interp_method_ = InterpMethod.from_string(interp_method)
     extrap_method_ = ExtrapMethod.from_string(extrap_method)

@@ -1,7 +1,11 @@
 """Public valuation parameters, PV/risk reports, and HW6 cashflow reports."""
 
+from fixedincomelib.model import Model
+from fixedincomelib.product import Product
+from fixedincomelib.valuation.utilities import create_value_report
+
 from fixedincomelib.valuation import (
-    RiskReport, ValuationParameters, ValuationParametersBuilderRegistry,
+    ValuationParameters, ValuationParametersBuilderRegistry,
     ValuationParametersCollection, ValuationRequest, ValuationEngineProductRegistry,
 )
 # Import the implementation to register its (model, product, method) key.
@@ -23,22 +27,18 @@ def qfCreateValuationParametersCollection(
     return ValuationParametersCollection(valuation_parameters)
 
 
-def qfCreateValueReport(model, product, valuation_parameters_collection, request: str):
-    """Return currency/PV rows or a RiskReport whose display uses 1 bp units.
+def qfCreateValueReport(
+    model: Model,
+    product: Product,
+    valuation_parameters_collection: ValuationParametersCollection,
+    request: str,
+):
 
-    Request strings are case-insensitive. Only PV and FirstOrderRisk are
-    supported; state-to-quote conversion is identity for direct IFR inputs.
-    """
-    parsed_request = ValuationRequest.from_string(request)
-    engine = ValuationEngineProductRegistry.new_valuation_engine(
-        model, product, valuation_parameters_collection, parsed_request,
+    this_report = create_value_report(
+        model, product, valuation_parameters_collection, ValuationRequest.from_string(request)
     )
-    if parsed_request == ValuationRequest.PV:
-        engine.calculate_value()
-        return engine.get_value_and_cash().pv
-    gradient = []
-    engine.calculate_risk(gradient)
-    return RiskReport.from_model_gradient(model, gradient)
+
+    return this_report
 
 
 def qfCreateCashflowsReport(model, product, valuation_parameters_collection):

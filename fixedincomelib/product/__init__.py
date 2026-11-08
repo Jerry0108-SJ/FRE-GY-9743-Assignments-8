@@ -15,10 +15,10 @@ from fixedincomelib.product.utilities import PayOrReceive
 from fixedincomelib.product.product_portfolio import ProductPortfolio
 from fixedincomelib.product.linear_products import (
     ProductForwardRateCashflow, ProductInterestRateStream, InterestRateStream,
-    ProductFRA, ProductRFRSwap, ProductOvernightIndexBasisSwap,
+    ProductFRA, ProductRFRSwap, ProductOvernightIndexBasisSwap, ProductZeroSpread,
 )
 from fixedincomelib.product.product_factory import ProductFactory
 
 __all__ += ["ProductBuilderRegistry", "PayOrReceive", "ProductPortfolio",
             "ProductForwardRateCashflow", "ProductInterestRateStream", "InterestRateStream",
-            "ProductFRA", "ProductRFRSwap", "ProductOvernightIndexBasisSwap", "ProductFactory"]
+            "ProductFRA", "ProductRFRSwap", "ProductOvernightIndexBasisSwap", "ProductZeroSpread", "ProductFactory"]

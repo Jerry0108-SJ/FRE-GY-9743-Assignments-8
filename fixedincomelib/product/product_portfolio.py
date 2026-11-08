@@ -9,8 +9,12 @@ class ProductPortfolio(Product):
 
     def __init__(self, products, weights=None):
         super().__init__()
+        if len(products) == 0:
+            raise ValueError("A portfolio must contain at least one product.")
         if weights is None:
             weights = [1.0] * len(products)
+        if len(weights) != len(products):
+            raise ValueError("The number of weights must match the number of products.")
         self.elements_ = list(zip(products, weights))
         self.num_elements_ = len(products)
         self.first_date_ = min(p.first_date for p in products)

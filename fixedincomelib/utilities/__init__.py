@@ -4,6 +4,5 @@ from fixedincomelib.utilities.numerics import (
     InterpolatorFactory,
     Interpolator1D,
     Interpolator1DPCP,
-    Interpolator1DMonotoneConvex,
 )
 from fixedincomelib.utilities.utils import Registry

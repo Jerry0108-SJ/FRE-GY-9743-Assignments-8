@@ -287,3 +287,45 @@ class DataConventionFRA(DataConvention):
 
 for _convention in (DataConventionFRA, DataConventionRFRSwap, DataConventionOvernightIndexBasisSwap):
     DataConventionRegFunction().register(_convention.type(), _convention)
+
+
+class DataConventionZeroSpread(DataConvention):
+
+    _type = "ZERO SPREAD"
+
+    def __init__(self, unique_name, content):
+
+        if len(content) != 3:
+            raise ValueError(f"{unique_name}: content should have 3 fields, got {len(content)}")
+
+        self.index_ = None
+
+        upper_content = {k.upper(): v for k, v in content.items()}
+        for k, v in upper_content.items():
+            if k.upper() == "INDEX":
+                self.index_ = v
+            elif k == "BUSINESS_DAY_CONVENTION":
+                self.business_day_convention_ = v
+            elif k == "HOLIDAY_CONVENTION":
+                self.holiday_convention_ = v
+
+        super().__init__(unique_name, DataConventionZeroSpread._type, self.__dict__.copy())
+
+    @property
+    def index(self) -> ql.Index:
+        return IndexRegistry().get(self.index_)
+
+    @property
+    def index_str(self) -> str:
+        return self.index_
+
+    @property
+    def business_day_convention(self) -> BusinessDayConvention:
+        return BusinessDayConvention(self.business_day_convention_)
+
+    @property
+    def holiday_convention(self) -> HolidayConvention:
+        return HolidayConvention(self.holiday_convention_)
+
+__all__ += ["DataConventionZeroSpread"]
+DataConventionRegFunction().register(DataConventionZeroSpread._type, DataConventionZeroSpread)

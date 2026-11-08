@@ -1,7 +1,12 @@
-"""IFR curve objects and interpolator setup based on the course template."""
+"""IFR components, calibration Jacobian, and market-data labels from the template."""
 
 import numpy as np
 import QuantLib as ql
+from scipy.linalg import block_diag
+from fixedincomelib.valuation import (
+    FundingIndexParameter, ValuationParametersCollection,
+    ValuationEngineProductRegistry, ValuationRequest,
+)
 from typing import List, Optional
 
 from fixedincomelib.date import Date, accrued
@@ -122,6 +127,49 @@ class YieldCurve(Model):
             else:
                 output[:] = scaler * block
 
+    def calculate_model_jacobian(self):
+        if self.is_jacobian_calculated_:
+            return
+        # WARNING: WE DO NOT ALLOW A MIXTURE OF CALIBRATION INSTRUMENTS AND STATE DATA FOR NOW
+        only_state_data = False
+        jacobian_pre = [None] * self.num_components
+        for target_name, yc_component in self.components_.items():
+            index = self.component_indices[target_name]
+            calib_prod = yc_component.calibration_product
+            calib_funding = yc_component.calibration_funding
+            if len(calib_prod) == 0:
+                # no calibration, just using state data
+                # jacobian is identity
+                jacobian_pre[index] = np.diag(np.ones(yc_component.num_state_data))
+                only_state_data = True
+                continue
+            # calculate calibration instrument gradient
+            grads = []
+            for _, (prod, funding) in enumerate(zip(calib_prod, calib_funding)):
+                fi_vp = FundingIndexParameter({"Funding Index": funding})
+                vpc = ValuationParametersCollection([fi_vp])
+                engine = ValuationEngineProductRegistry.new_valuation_engine(
+                    self, prod, vpc, ValuationRequest.PV_DETAILED
+                )
+                engine.calculate_value()
+                # TODO 3: Append this instrument's par-rate gradient as one
+                # Jacobian row, flattening blocks in model component order.
+                raise NotImplementedError("TODO 3: construct a calibration Jacobian row")
+            jacobian_pre[index] = grads  # np.concatenate(grads, axis=0)
+
+        self.model_jacobian_ = (
+            block_diag(*jacobian_pre) if only_state_data else np.concatenate(jacobian_pre, axis=0)
+        )
+        self.is_jacobian_calculated_ = True
+
+    def risk_postprocess(self, grad: np.ndarray):
+        frame = [None] * self.num_components
+        for target_name, yc_component in self.components_.items():
+            index = self.component_indices[target_name]
+            frame[index] = yc_component.market_data
+        frame = np.concatenate(frame, axis=0)
+        return np.concatenate([frame, grad.reshape(len(frame), 1)], axis=1)
+
 
 class YieldCurveModelComponent(ModelComponent):
 
@@ -153,7 +201,6 @@ class YieldCurveModelComponent(ModelComponent):
             self.build_method.interpolation_method,
             self.build_method.extrapolation_method,
         )
-        #Hint?
 
     def perturb_model_parameter(
         self, parameter_id: int, perturb_size: float, override_parameter: Optional[bool] = False

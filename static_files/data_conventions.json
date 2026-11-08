@@ -47,5 +47,11 @@
     "holiday_convention": "USGS",
     "fixing_offset": "0D",
     "payment_offset": "0D"
+  },
+  "SOFR-1B-FLAT-OVER-SOFR-1B-ZERO-SPREAD": {
+    "type": "ZERO SPREAD",
+    "index": "SOFR-1B",
+    "business_day_convention": "F",
+    "holiday_convention": "USGS"
   }
 }

@@ -1,12 +1,12 @@
-"""Data identifiers for IFR inputs, taken from the course template."""
+"""Template identifiers for curve inputs and the funding-parameter table."""
 
 from typing import Tuple
 from abc import ABC, abstractmethod
 
-from fixedincomelib.market.data_conventions import DataConvention, DataConventionIFR
+from fixedincomelib.market.data_conventions import DataConvention, DataConventionIFR, DataConventionRFRSwap
 from fixedincomelib.market.registries import DataIdentifierRegistry
 
-__all__ = ["DataIdentifier", "DataIdentifierIFR"]
+__all__ = ["DataIdentifier", "DataIdentifierIFR", "DataIdentifierOvernightIndexSwap"]
 
 
 class DataIdentifier(ABC):
@@ -50,3 +50,46 @@ class DataIdentifierIFR(DataIdentifier):
 
 
 DataIdentifierRegistry().register(DataIdentifierIFR._data_type.upper(), DataIdentifierIFR)
+
+
+class DataIdentifierOvernightIndexSwap(DataIdentifier):
+    """Par OIS rates in decimals; report a positive one-basis-point rate move."""
+
+    _data_type = 'Overnight Index Swap'
+
+    def __init__(self, data_convention: DataConventionRFRSwap) -> None:
+        super().__init__(data_convention)
+
+    def unit(self):
+        return 0.0001
+
+
+DataIdentifierRegistry().register(DataIdentifierOvernightIndexSwap._data_type.upper(), DataIdentifierOvernightIndexSwap)
+
+
+from fixedincomelib.market.data_conventions import DataConventionZeroSpread
+
+class DataIdentifierZeroSpread(DataIdentifier):
+
+    _data_type = 'Spread Zero Rate'
+
+    def __init__(self, data_convention: DataConventionZeroSpread) -> None:
+        super().__init__(data_convention)
+
+    def unit(self):
+        return 0.0001
+
+
+class DataIdentifierDataGeneric(DataIdentifier):
+
+    _data_type = 'Data Generic'
+
+    def __init__(self, data_label: str) -> None:
+        super().__init__(data_label)
+
+    def unit(self):
+        pass
+
+__all__ += ["DataIdentifierZeroSpread", "DataIdentifierDataGeneric"]
+DataIdentifierRegistry().register(DataIdentifierZeroSpread._data_type.upper(), DataIdentifierZeroSpread)
+DataIdentifierRegistry().register(DataIdentifierDataGeneric._data_type.upper(), DataIdentifierDataGeneric)

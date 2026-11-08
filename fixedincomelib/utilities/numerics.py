@@ -9,7 +9,6 @@ class InterpMethod(Enum):
 
     PIECEWISE_CONSTANT_LEFT_CONTINUOUS = 'PIECEWISE_CONSTANT_LEFT_CONTINUOUS'
     LINEAR = 'LINEAR'
-    MONOTONE_CONVEX = 'MONOTONE_CONVEX'
 
     @classmethod
     def from_string(cls, value: str) -> 'InterpMethod':
@@ -63,6 +62,7 @@ class Interpolator1D(ABC):
 
     @abstractmethod
     def integrate(self, start_x: float, end_x: float) -> float:
+        """Return the signed integral; swapping the limits reverses its sign."""
         pass
 
     @abstractmethod
@@ -71,6 +71,7 @@ class Interpolator1D(ABC):
 
     @abstractmethod
     def gradient_of_integrated_value_wrt_ordinate(self, start_x: float, end_x: float) -> np.ndarray:
+        """Return ordinate sensitivities of the signed integral."""
         pass
 
     @property
@@ -113,6 +114,8 @@ class Interpolator1DPCP(Interpolator1D):
         return float(self.values_[idx])
 
     def integrate(self, start_x: float, end_x: float) -> float:
+        if end_x < start_x:
+            return -self.integrate(end_x, start_x)
         edges = np.concatenate(([-np.inf], np.asarray(self.axis1_, dtype=float)[:-1], [np.inf]))
         lo = np.maximum(start_x, edges[:-1])
         hi = np.minimum(end_x, edges[1:])
@@ -126,40 +129,22 @@ class Interpolator1DPCP(Interpolator1D):
         return grad
 
     def gradient_of_integrated_value_wrt_ordinate(self, start_x: float, end_x: float) -> np.ndarray:
+        if end_x < start_x:
+            return -self.gradient_of_integrated_value_wrt_ordinate(end_x, start_x)
         edges = np.concatenate(([-np.inf], np.asarray(self.axis1_, dtype=float)[:-1], [np.inf]))
         lo = np.maximum(start_x, edges[:-1])
         hi = np.minimum(end_x, edges[1:])
         return np.maximum(hi - lo, 0.0)
 
 
-
-class Interpolator1DMonotoneConvex(Interpolator1D):
-    """HW7: implement your own monotone, convex IFR interpolator here."""
-
-    def __init__(self, axis1: np.ndarray, values: np.ndarray,
-                 extrapolation_method: ExtrapMethod) -> None:
-        super().__init__(axis1, values, InterpMethod.MONOTONE_CONVEX,
-                         extrapolation_method)
-        # TODO: Prepare your interpolation method.
-
-    def interpolate(self, x: float) -> float:
-        raise NotImplementedError("HW7: implement interpolate")
-
-    def integrate(self, start_x: float, end_x: float) -> float:
-        raise NotImplementedError("HW7: implement integrate")
-
-    # Optional risk interface
-    # The test cells for risk are not prepared but you can do it by your own.
-    def gradient_wrt_ordinate(self, x: float) -> np.ndarray:
-        raise NotImplementedError("Optional risk: ordinate gradient is not implemented")
-
-    def gradient_of_integrated_value_wrt_ordinate(
-        self, start_x: float, end_x: float,
-    ) -> np.ndarray:
-        raise NotImplementedError("Optional risk: integrated ordinate gradient is not implemented")
-
-
 class InterpolatorFactory:
+    """Construct interpolators through a common interface.
+
+    The 1-D factory currently implements PCP with FLAT extrapolation. Extend
+    it by adding an InterpMethod member, an Interpolator1D implementation,
+    and a factory branch; callers continue using the same public APIs.
+    An enum member alone does not imply an available implementation.
+    """
 
     @staticmethod
     def create_1d_interpolator(axis1: np.ndarray | List,
@@ -179,7 +164,5 @@ class InterpolatorFactory:
 
         if interpolation_method == InterpMethod.PIECEWISE_CONSTANT_LEFT_CONTINUOUS:
             return Interpolator1DPCP(axis1_, values_, extrapolation_method)
-        elif interpolation_method == InterpMethod.MONOTONE_CONVEX:
-            return Interpolator1DMonotoneConvex(axis1_, values_, extrapolation_method)
         else:
-            raise ValueError(f'Unsupported interpolation method: {interpolation_method}')
+            raise ValueError(f'No 1-D implementation is available for interpolation method: {interpolation_method}')

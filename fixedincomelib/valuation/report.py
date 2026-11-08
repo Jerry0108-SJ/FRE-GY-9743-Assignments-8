@@ -1,4 +1,4 @@
-"""PV/cash reports and IFR risk with basis-point scaling only on display."""
+"""PV/cash reports and quote risk with basis-point scaling only on display."""
 
 import pandas as pd
 
@@ -37,7 +37,7 @@ class PVCashReport:
 
 
 class RiskReport:
-    """Snapshot of raw IFR derivatives, with the template's seven data columns.
+    """Original assignment's direct-IFR report with state-gradient blocks.
 
     COMPONENT and NODE_INDEX identify each row explicitly. ``state_gradient``
     retains the original block structure; ``display`` applies UNIT exactly
@@ -66,6 +66,7 @@ class RiskReport:
                 ])
         return cls(rows, gradient)
 
+
     @property
     def content(self) -> list:
         return self.content_
@@ -92,3 +93,59 @@ class CashflowsReport:
 
     def display(self):
         return pd.DataFrame(self.content)
+
+
+from enum import Enum
+from typing import List
+import numpy as np
+
+class RiskReportColumns(Enum):
+
+    DATA_TYPE = 'DATA_TYPE'
+    DATA_CONVENTION = 'DATA_CONVENTION'
+    AXIS1 = 'AXIS1'
+    AXIS2 = 'AXIS2'
+    DATA_VALUES = 'MARKET_QUOTE'
+    UNIT = 'UNIT'
+    VALUES = 'VALUES'
+
+    @classmethod
+    def from_string(cls, value: str) -> 'RiskReportColumns':
+        if not isinstance(value, str):
+            raise TypeError("value must be a string")
+        try:
+            return cls(value.upper())
+        except ValueError:
+            raise ValueError(f"Invalid token: {value}")
+
+    def to_string(self) -> str:
+        return self.value
+
+
+class RiskReprt:
+
+    def __init__(self, content : np.ndarray) -> None:
+        self.content_ = content
+        self.schema_ = [ \
+            RiskReportColumns.DATA_TYPE.to_string(),
+            RiskReportColumns.DATA_CONVENTION.to_string(),
+            RiskReportColumns.AXIS1.to_string(),
+            RiskReportColumns.AXIS2.to_string(),
+            RiskReportColumns.DATA_VALUES.to_string(),
+            RiskReportColumns.UNIT.to_string(),
+            RiskReportColumns.VALUES.to_string()
+        ]
+
+    def display(self):
+        df = pd.DataFrame(self.content_, columns=self.schema_)
+        df[RiskReportColumns.VALUES.to_string()] = df.apply(lambda x: \
+            float(x[RiskReportColumns.VALUES.to_string()]) * float(x[RiskReportColumns.UNIT.to_string()]), axis=1)
+        return df
+
+    @property
+    def content(self) -> List:
+        return self.content_
+
+    @property
+    def schema(self) -> List:
+        return self.schema_

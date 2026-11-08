@@ -8,11 +8,12 @@ from typing import Any
 from fixedincomelib.date import Date, TermOrDate, add_period
 from fixedincomelib.market.data_conventions import (
     CompoundingMethod, DataConvention, DataConventionFRA,
-    DataConventionRFRSwap, DataConventionOvernightIndexBasisSwap,
+    DataConventionRFRSwap, DataConventionOvernightIndexBasisSwap, DataConventionZeroSpread,
 )
 from fixedincomelib.product.product_interfaces import ProductBuilderRegistry
-from fixedincomelib.product.linear_products import ProductFRA, ProductRFRSwap, ProductOvernightIndexBasisSwap
-from fixedincomelib.product.utilities import PayOrReceive
+from fixedincomelib.product.linear_products import ProductFRA, ProductRFRSwap, ProductOvernightIndexBasisSwap, ProductZeroSpread
+import QuantLib as ql
+from fixedincomelib.product.utilities import PayOrReceive, LongOrShort
 
 
 class ProductFactory:
@@ -172,6 +173,35 @@ class ProductFactory:
             kwargs.get("notional", 1e4), data_convention.acc_basis, bdc, holidays,
         )
 
+    @classmethod
+    def create_zero_spread_product(
+        cls,
+        value_date: Date,
+        axis1: str,
+        data_convention: DataConventionZeroSpread,
+        values: float,
+        **kwargs: Any,
+    ) -> ProductZeroSpread:
+
+        index: ql.InterestRateIndex = data_convention.index
+        tenor, _ = ProductFactory._tokenize_axis1(axis1)
+        term_date = None
+        if tenor.is_term():
+            calendar: ql.QuantLib.Calendar = index.fixingCalendar()
+            term_date = Date(
+                calendar.advance(
+                    value_date, tenor.get_term(), data_convention.business_day_convention.value
+                )
+            )
+        else:
+            term_date = tenor.get_date()
+        long_or_short = LongOrShort.from_string(kwargs.get("long_or_short", "long"))
+        amount = kwargs.get("amount", 1e4)
+        return ProductZeroSpread(
+            term_date, data_convention.index_str, values, amount, long_or_short
+        )
+
+
     @staticmethod
     def _tokenize_axis1(axis1):
         tokens = axis1.strip().replace("X", "x").split("x")
@@ -184,3 +214,5 @@ ProductBuilderRegistry().register(DataConventionFRA.type(), ProductFactory.creat
 ProductBuilderRegistry().register(DataConventionRFRSwap.type(), ProductFactory.create_rfr_swap)
 ProductBuilderRegistry().register(DataConventionOvernightIndexBasisSwap.type(),
                                   ProductFactory.create_overnight_index_basis_swap)
+
+ProductBuilderRegistry().register(DataConventionZeroSpread.type(), ProductFactory.create_zero_spread_product)

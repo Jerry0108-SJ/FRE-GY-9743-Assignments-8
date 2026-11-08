@@ -58,7 +58,13 @@ def qfCreateProductOvernightIndexCashflow(
     spread: float = 0.0,
     payment_date: Optional[str] = "",
 ) -> ProductOvernightIndexCashflow:
-    """Create an overnight cashflow from a date or tenor such as '3M'."""
+    """Create an overnight cashflow from a date or tenor such as '3M'.
+
+    This object is a building block for interest-rate streams; it has no
+    standalone product valuation engine. To value a single overnight coupon,
+    use qfCreateProductInterestRateStream with accrual_period=None,
+    float_index set to the overnight index, and is_on_index=True.
+    """
     return ProductOvernightIndexCashflow(
         Date(effective_date), TermOrDate(term_or_termination_date), overnight_index,
         CompoundingMethod.from_string(compounding_method), spread, notional,
@@ -97,7 +103,12 @@ def qfCreateProductInterestRateStream(
     ois_spread=0.0, payment_offset="0D", payment_business_day_convention="F",
     payment_holiday_convention="USGS", rule="BACKWARD", end_of_month=False,
 ):
-    """Create a fixed, overnight, or term-rate leg; None period gives one coupon."""
+    """Create a fixed, overnight, or term-rate leg; None period gives one coupon.
+
+    For a single overnight coupon, set accrual_period=None, supply float_index,
+    and keep is_on_index=True. Pass the resulting stream to qfCreateValueReport
+    or qfCreateCashflowsReport; the stream engine handles coupon valuation.
+    """
     return ProductInterestRateStream(
         Date(effective_date), Date(termination_date),
         None if accrual_period is None else Period(accrual_period), notional, Currency(currency),

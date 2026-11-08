@@ -1,4 +1,4 @@
-"""Create IFR yield-curve models and query their discount factors."""
+"""Create yield-curve models and query their discount factors."""
 
 from typing import Optional
 

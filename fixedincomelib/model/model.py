@@ -1,7 +1,7 @@
 """Model and component infrastructure adapted from the course template.
 
-This stage provides model setup; instrument-calibration risk interfaces are
-outside the IFR-only construction path.
+YieldCurve builds the calibration Jacobian; valuation utilities convert state
+risk to market-quote risk.
 """
 
 import numpy as np
@@ -296,3 +296,4 @@ class Model(metaclass=ABCMeta):
     def perturb_model_parameter(self, target : ql.Index | str, parameter_id : int, perturb_size : float, override_parameter : Optional[bool]=False):
         component = self.retrieve_model_component(target)
         component.perturb_model_parameter(parameter_id, perturb_size, override_parameter)
+        self.is_jacobian_calculated_ = False

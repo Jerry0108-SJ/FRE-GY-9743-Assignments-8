@@ -10,7 +10,11 @@ from fixedincomelib.valuation.report import PVCashReport
 
 class ValuationRequest(Enum):
     PV = "pv"
+    CASH = "cash"
+    PV_DETAILED = "pvdetailed"
     FIRST_ORDER_RISK = "firstorderrisk"
+    CASHFLOWS_REPORT = "cashflowsreport"
+    PAR_RATE_OR_SPREAD = "parrateorspread"
 
     @classmethod
     def from_string(cls, value: str):
@@ -53,7 +57,7 @@ class ValuationEngineProduct(ABC):
         raise NotImplementedError("Risk is not implemented for this product.")
 
     def calculate_first_order_risk(self, gradient: list[np.ndarray], scaler=1.0, accumulate=False) -> None:
-        """Template-compatible entry point; the implementation lives in calculate_risk."""
+        """Delegate to calculate_risk for engines retaining the original interface."""
         self.calculate_risk(gradient, scaler=scaler, accumulate=accumulate)
 
     def get_value_and_cash(self) -> PVCashReport:

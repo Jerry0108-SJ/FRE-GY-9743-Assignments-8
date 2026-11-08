@@ -265,6 +265,8 @@ class ProductInterestRateStream(ProductPortfolio):
         payment_business_day_convention=None, payment_holiday_convention=None,
         rule="BACKWARD", end_of_month=False,
     ):
+        if (float_index is None) == (fixed_rate is None):
+            raise ValueError("Exactly one of fixed_rate and float_index must be supplied.")
         effective_date, termination_date = Date(effective_date), Date(termination_date)
         payment_offset = Period("0D") if payment_offset is None else payment_offset
         pay_bdc = payment_business_day_convention or BusinessDayConvention("F")
@@ -986,3 +988,67 @@ for _product in (ProductFixedAccruedCashflow, ProductOvernightIndexCashflow,
                  ProductForwardRateCashflow, ProductInterestRateStream, ProductFRA,
                  ProductRFRSwap, ProductOvernightIndexBasisSwap):
     ProductBuilderRegistry().register(_product._product_type + "_DES", _product.deserialize)
+
+
+class ProductZeroSpread(Product):
+
+    _version = 1
+    _product_type = "PRODUCT_ZERO_SPREAD"
+
+    def __init__(
+        self,
+        termination_date: Date,
+        index: str,
+        zero_rate: float,
+        notional: float,
+        long_or_short: LongOrShort,
+    ) -> None:
+
+        super().__init__()
+        # get index
+        self.index_str_ = index
+        self.index_ = IndexRegistry().get(index)
+        self.zero_rate_ = zero_rate
+        self.currency_ = Currency(self.index_.currency().code())
+        self.first_date_ = self.last_date_ = termination_date
+        self.long_or_short_ = long_or_short
+        self.notional_ = notional
+
+    @property
+    def termination_date(self) -> Date:
+        return self.last_date
+
+    @property
+    def index(self) -> ql.Index:
+        return self.index_
+
+    @property
+    def zero_rate(self) -> float:
+        return self.zero_rate_
+
+    def accept(self, visitor: ProductVisitor):
+        return visitor.visit(self)
+
+    def serialize(self) -> dict:
+        content = {}
+        content["VERSION"] = self._version
+        content["TYPE"] = self._product_type
+        content["TERMINATION_DATE"] = self.termination_date.ISO()
+        content["INDEX"] = self.index_str_
+        content["ZERO_RATE"] = self.zero_rate
+        content["NOTIONAL"] = self.notional
+        content["LONG_OR_SHORT"] = self.long_or_short.to_string().upper()
+        return content
+
+    @classmethod
+    def deserialize(cls, input_dict) -> "ProductZeroSpread":
+        termination_date = Date(input_dict["TERMINATION_DATE"])
+        index = input_dict["INDEX"]
+        zero_rate = input_dict["ZERO_RATE"]
+        notional = float(input_dict["NOTIONAL"])
+        long_or_short = LongOrShort.from_string(input_dict["LONG_OR_SHORT"])
+        return cls(termination_date, index, zero_rate, notional, long_or_short)
+
+__all__ += ["ProductZeroSpread"]
+ProductBuilderRegistry().register(ProductZeroSpread._product_type, ProductZeroSpread)
+ProductBuilderRegistry().register(ProductZeroSpread._product_type + "_DES", ProductZeroSpread.deserialize)

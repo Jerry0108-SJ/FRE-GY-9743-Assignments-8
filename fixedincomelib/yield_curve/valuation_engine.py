@@ -120,6 +120,27 @@ class ValuationEngineInterestRateStream(ValuationEngineProduct):
             if cf.payment_date == self.value_date:
                 self.cash_ += self.payoffs_[i]
 
+    def calculate_first_order_risk(self, gradient=None, scaler: float = 1.0, accumulate: bool = False) -> None:
+        if any(isinstance(helper, ValuationEngineAnalyticsForwardRate) for helper in self.index_engines_):
+            raise NotImplementedError("Term-stream risk is outside the OIS assignment.")
+        self.calculate_value()
+        self.model.resize_gradient(gradient)
+        if not accumulate:
+            for block in gradient:
+                block.fill(0.0)
+        for i in range(self.stream_.num_cashflows()):
+            cf = self.stream_.cashflow(i)
+            if cf.payment_date < self.value_date:
+                continue
+            if cf.payment_date > self.value_date:
+                self.model.discount_factor_gradient_wrt_state(
+                    self.funding_index_, cf.payment_date, gradient,
+                    scaler=scaler * self.payoffs_[i], accumulate=True)
+            if self.index_engines_[i] is not None:
+                self.index_engines_[i].calculate_risk(
+                    gradient, scaler=scaler * cf.notional * self.accruals_[i] * self.dfs_[i],
+                    accumulate=True)
+
 
     def create_cash_flows_report(self):
         self.calculate_value()
@@ -158,14 +179,71 @@ class ValuationEngineProductRfrSwap(ValuationEngineProduct):
         self.floating_leg_sign_ = -self.fixed_leg_sign_
         self.fixed_leg_engine_ = ValuationEngineInterestRateStream(model, valuation_parameters_collection, product.fixed_leg, request)
         self.floating_leg_engine_ = ValuationEngineInterestRateStream(model, valuation_parameters_collection, product.floating_leg, request)
+        self.fixed_rate_ = product.fixed_rate
+        self.notional_ = product.notional
+        self.fixed_value_ = self.float_value_ = 0.0
+        self.fixed_cash_ = self.float_cash_ = 0.0
+        self.annuity_ = self.par_rate_or_spread_ = 0.0
+
 
     def calculate_value(self):
+
         self.fixed_leg_engine_.calculate_value()
         self.floating_leg_engine_.calculate_value()
-        self.value_ = (self.fixed_leg_sign_ * self.fixed_leg_engine_.value +
-                       self.floating_leg_sign_ * self.floating_leg_engine_.value)
-        self.cash_ = (self.fixed_leg_sign_ * self.fixed_leg_engine_.cash +
-                      self.floating_leg_sign_ * self.floating_leg_engine_.cash)
+        self.fixed_value_ = self.fixed_leg_engine_.value_
+        self.float_value_ = self.floating_leg_engine_.value_
+        self.fixed_cash_ = self.fixed_leg_engine_.cash_
+        self.float_cash_ = self.floating_leg_engine_.cash_
+
+        self.value_ = (
+            self.fixed_leg_sign_ * self.fixed_value_ + self.floating_leg_sign_ * self.float_value_
+        )
+        self.cash_ = (
+            self.fixed_leg_sign_ * self.fixed_cash_ + self.floating_leg_sign_ * self.float_cash_
+        )
+        # TODO 2a: Set self.annuity_ to the fixed-leg annuity per unit notional.
+        # Use the nonzero fixed coupon and the fixed-leg PV already calculated.
+        raise NotImplementedError("TODO 2a: calculate the fixed-leg annuity")
+
+        # TODO 2b: Set self.par_rate_or_spread_ to the OIS par rate in decimals.
+        # Use the floating-leg PV and the annuity from TODO 2a.
+        raise NotImplementedError("TODO 2b: calculate the OIS par rate")
+
+    def calculate_first_order_risk(
+        self, gradient=None, scaler: float = 1.0, accumulate: bool = False
+    ) -> None:
+
+        local_grad = []
+        self.model_.resize_gradient(local_grad)
+
+        self.fixed_leg_engine_.calculate_first_order_risk(
+            local_grad, scaler=self.fixed_leg_sign_ * scaler, accumulate=True
+        )
+        self.floating_leg_engine_.calculate_first_order_risk(
+            local_grad, scaler=self.floating_leg_sign_ * scaler, accumulate=True
+        )
+
+        self.model_.resize_gradient(gradient)
+        if accumulate:
+            for i in range(len(gradient)):
+                gradient[i] += local_grad[i]
+        else:
+            gradient[:] = local_grad
+
+    def par_rate_or_spread(self) -> float:
+        return self.par_rate_or_spread_
+
+    def grad_at_par(self) -> np.ndarray:
+
+        local_grad = []
+        self.model_.resize_gradient(local_grad)
+
+        # TODO 2c: Accumulate the OIS par-rate gradient with respect to X^I
+        # in local_grad. Apply the quotient rule using both leg engines,
+        # keeping the fixed coupon constant and the model's component order.
+        raise NotImplementedError("TODO 2c: calculate the OIS par-rate gradient")
+
+        return local_grad
 
     def create_cash_flows_report(self):
         return _combine_cashflow_reports([
@@ -237,3 +315,142 @@ for _product, _engine in (
 ):
     ValuationEngineProductRegistry().register(
         (ModelType.YIELD_CURVE.to_string(), _product._product_type, AnalyticValParam._vp_type), _engine)
+
+from fixedincomelib.date import accrued
+from fixedincomelib.market.registries import FundingIdentifier
+from fixedincomelib.product import ProductZeroSpread, LongOrShort
+from fixedincomelib.valuation import ValuationParametersCollection, ValuationRequest
+from fixedincomelib.valuation.report import PVCashReport
+from fixedincomelib.yield_curve.yield_curve_model import YieldCurve
+
+class ValuationEngineProductZeroSpread(ValuationEngineProduct):
+
+    def __init__(
+        self,
+        model: YieldCurve,
+        valuation_parameters_collection: ValuationParametersCollection,
+        product: ProductZeroSpread,
+        request: ValuationRequest,
+    ):
+        super().__init__(model, valuation_parameters_collection, product, request)
+
+        # get info from product
+        self.currency_ = product.currency
+        self.termination_date_ = product.termination_date
+        self.sign_ = 1.0 if product.long_or_short == LongOrShort.LONG else -1.0
+        self.notional_ = product.notional
+        self.index_ = product.index
+        self.zero_spread_ = product.zero_rate
+        self.time_to_expiry_ = accrued(self.value_date, self.termination_date_)
+        # resolve valuation parameters
+        self.vpc_: ValuationParametersCollection = valuation_parameters_collection
+        assert self.vpc_.has_vp_type(FundingIndexParameter._vp_type)
+        self.funding_vp_: FundingIndexParameter = self.vpc_.get_vp_from_build_method_collection(
+            FundingIndexParameter._vp_type
+        )
+        self.funding_index_: FundingIdentifier = self.funding_vp_.get_funding_index(self.currency_)
+
+    @classmethod
+    def val_engine_type(cls) -> str:
+        return cls.__name__
+
+    def calculate_value(self):
+        if self.value_date <= self.termination_date_:
+            funding_model: YieldCurve = self.model_
+
+            self.df_funding_ = funding_model.discount_factor(
+                self.funding_index_, self.termination_date_
+            )
+            self.df_base_ = funding_model.discount_factor(self.index_, self.termination_date_)
+            self.value_ = (
+                self.sign_
+                * self.notional_
+                * (
+                    self.df_funding_ / self.df_base_
+                    - np.exp(-self.zero_spread_ * self.time_to_expiry_)
+                )
+            )
+        else:
+            raise Exception("Zero spread product has to be outright.")
+
+    def calculate_first_order_risk(
+        self, gradient=None, scaler: float = 1.0, accumulate: bool = False
+    ) -> None:
+
+        local_grad = []
+        self.model_.resize_gradient(local_grad)
+
+        if self.value_date <= self.termination_date_:
+            funding_model: YieldCurve = self.model_
+            funding_model.discount_factor_gradient_wrt_state(
+                self.funding_index_,
+                self.termination_date_,
+                local_grad,
+                scaler * self.sign_ * self.notional_ / self.df_base_,
+                True,
+            )
+            funding_model.discount_factor_gradient_wrt_state(
+                self.index_,
+                self.termination_date_,
+                local_grad,
+                -scaler
+                * self.sign_
+                * self.notional_
+                * self.df_funding_
+                / self.df_base_
+                / self.df_base_,
+                True,
+            )
+
+        self.model_.resize_gradient(gradient)
+        if accumulate:
+            for i in range(len(gradient)):
+                gradient[i] += local_grad[i]
+        else:
+            gradient[:] = local_grad
+
+    def create_cash_flows_report(self) -> CashflowsReport:
+        raise Exception("ProductZeroSpread does not support cahslfow report")
+
+    def get_value_and_cash(self) -> PVCashReport:
+        report = PVCashReport(self.currency_)
+        report.set_pv(self.currency_, self.value_)
+        report.set_cash(self.currency_, self.cash_)
+        return report
+
+    def grad_at_par(self):
+        local_grad = []
+        self.model_.resize_gradient(local_grad)
+
+        if self.value_date <= self.termination_date_:
+            # self.value_ = self.sign_ * self.notional_ * ( \
+            #     self.df_funding_ / self.df_base_ -  np.exp(-self.zero_spread_ * self.time_to_expiry_))
+            # -1/T * ln(df_f / df_base) = s
+            df_ratio = self.df_funding_ / self.df_base_
+            funding_model: YieldCurve = self.model_
+            funding_model.discount_factor_gradient_wrt_state(
+                self.funding_index_,
+                self.termination_date_,
+                local_grad,
+                -1.0 / self.time_to_expiry_ * df_ratio / self.df_base_,
+                True,
+            )
+            funding_model.discount_factor_gradient_wrt_state(
+                self.index_,
+                self.termination_date_,
+                local_grad,
+                1.0
+                / self.time_to_expiry_
+                * df_ratio
+                * self.df_funding_
+                / self.df_base_
+                / self.df_base_,
+                True,
+            )
+
+        return local_grad
+
+
+ValuationEngineProductRegistry().register(
+    (ModelType.YIELD_CURVE.to_string(), ProductZeroSpread._product_type, AnalyticValParam._vp_type),
+    ValuationEngineProductZeroSpread)
