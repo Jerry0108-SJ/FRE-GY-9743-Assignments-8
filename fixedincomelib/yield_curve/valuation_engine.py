@@ -203,11 +203,13 @@ class ValuationEngineProductRfrSwap(ValuationEngineProduct):
         )
         # TODO 2a: Set self.annuity_ to the fixed-leg annuity per unit notional.
         # Use the nonzero fixed coupon and the fixed-leg PV already calculated.
-        raise NotImplementedError("TODO 2a: calculate the fixed-leg annuity")
+        # Fixed-leg PV = N * K * sum_i(tau_i * P(0, T_i)) = N * K * A, so A = PV_fixed / (N * K).
+        self.annuity_ = self.fixed_value_ / (self.notional_ * self.fixed_rate_)
 
         # TODO 2b: Set self.par_rate_or_spread_ to the OIS par rate in decimals.
         # Use the floating-leg PV and the annuity from TODO 2a.
-        raise NotImplementedError("TODO 2b: calculate the OIS par rate")
+        # The par rate K* makes the two legs equal: N * K* * A = PV_float.
+        self.par_rate_or_spread_ = self.float_value_ / (self.notional_ * self.annuity_)
 
     def calculate_first_order_risk(
         self, gradient=None, scaler: float = 1.0, accumulate: bool = False
@@ -241,7 +243,20 @@ class ValuationEngineProductRfrSwap(ValuationEngineProduct):
         # TODO 2c: Accumulate the OIS par-rate gradient with respect to X^I
         # in local_grad. Apply the quotient rule using both leg engines,
         # keeping the fixed coupon constant and the model's component order.
-        raise NotImplementedError("TODO 2c: calculate the OIS par-rate gradient")
+        # K* = PV_float / (N * A) and A = PV_fixed / (N * K), with K constant, so
+        #   grad K* = grad PV_float / (N * A) - (K* / A) * grad A
+        #           = (grad PV_float - (K* / K) * grad PV_fixed) / (N * A).
+        # Each leg engine adds its PV gradient to local_grad, one block per model
+        # component in the model's order, so the two calls build grad K* directly.
+        self.calculate_value()  # refresh annuity_ and par_rate_or_spread_ at the current state
+        float_scaler = 1.0 / (self.notional_ * self.annuity_)
+        fixed_scaler = -float_scaler * self.par_rate_or_spread_ / self.fixed_rate_
+        self.floating_leg_engine_.calculate_first_order_risk(
+            local_grad, scaler=float_scaler, accumulate=True
+        )
+        self.fixed_leg_engine_.calculate_first_order_risk(
+            local_grad, scaler=fixed_scaler, accumulate=True
+        )
 
         return local_grad
 
