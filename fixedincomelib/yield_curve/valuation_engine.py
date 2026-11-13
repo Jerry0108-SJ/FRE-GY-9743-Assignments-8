@@ -203,11 +203,13 @@ class ValuationEngineProductRfrSwap(ValuationEngineProduct):
         )
         # TODO 2a: Set self.annuity_ to the fixed-leg annuity per unit notional.
         # Use the nonzero fixed coupon and the fixed-leg PV already calculated.
-        raise NotImplementedError("TODO 2a: calculate the fixed-leg annuity")
+        # Fixed PV = K * N * A  =>  A = Fixed PV / (K * N)
+        self.annuity_ = self.fixed_value_ / (self.fixed_rate_ * self.notional_)
 
         # TODO 2b: Set self.par_rate_or_spread_ to the OIS par rate in decimals.
         # Use the floating-leg PV and the annuity from TODO 2a.
-        raise NotImplementedError("TODO 2b: calculate the OIS par rate")
+        # Par rate S solves S * N * A = Float PV.
+        self.par_rate_or_spread_ = self.float_value_ / (self.annuity_ * self.notional_)
 
     def calculate_first_order_risk(
         self, gradient=None, scaler: float = 1.0, accumulate: bool = False
@@ -241,7 +243,17 @@ class ValuationEngineProductRfrSwap(ValuationEngineProduct):
         # TODO 2c: Accumulate the OIS par-rate gradient with respect to X^I
         # in local_grad. Apply the quotient rule using both leg engines,
         # keeping the fixed coupon constant and the model's component order.
-        raise NotImplementedError("TODO 2c: calculate the OIS par-rate gradient")
+        # S = K * Float / Fixed  =>
+        # dS = K / Fixed * dFloat - K * Float / Fixed^2 * dFixed
+        self.calculate_value()
+        fixed_value, float_value = self.fixed_value_, self.float_value_
+        coupon = self.fixed_rate_
+        self.floating_leg_engine_.calculate_first_order_risk(
+            local_grad, scaler=coupon / fixed_value, accumulate=True
+        )
+        self.fixed_leg_engine_.calculate_first_order_risk(
+            local_grad, scaler=-coupon * float_value / fixed_value**2, accumulate=True
+        )
 
         return local_grad
 
